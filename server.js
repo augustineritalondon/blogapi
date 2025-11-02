@@ -13,6 +13,10 @@ const PORT = process.env.PORT || 4000
 
 initializeDb();
 
+app.get("/", (req, res) => {
+  res.send("🎉 Blog API is running! Use /posts to get data.");
+});
+
 // CREATE
 app.post("/posts", async (req, res) => {
   try {
