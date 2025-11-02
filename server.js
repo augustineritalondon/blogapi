@@ -1,7 +1,7 @@
 const express = require("express")
 const cors = require("cors")
 const dotenv = require("dotenv")
-const { openDb } = require("./db")
+const { pool, initializeDb } = require("./db")
 
 dotenv.config();
 const app = express();
@@ -10,72 +10,51 @@ app.use(express.json())
 
 const PORT = process.env.PORT || 4000
 
-// initialize table
-
-
-let db;
-async function initializeDb() {
-  try {
-    db = await openDb();
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS posts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        content TEXT,
-        author TEXT,
-        date TEXT
-      )
-    `);
-    console.log("✅ Database and posts table ready");
-  } catch (error) {
-    console.error("❌ Error initializing database:", error);
-  }
-}
 
 initializeDb();
 
-// CREATE post
+// CREATE
 app.post("/posts", async (req, res) => {
   try {
     const { title, content, author } = req.body;
-    const date = new Date().toISOString();
-    const result = await db.run(
-      "INSERT INTO posts (title, content, author, date) VALUES (?, ?, ?, ?)",
+    const date = new Date();
+    const result = await pool.query(
+      "INSERT INTO posts (title, content, author, date) VALUES ($1, $2, $3, $4) RETURNING *",
       [title, content, author, date]
     );
-    res.json({ id: result.lastID, title, content, author, date });
+    res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// READ all posts
+// READ all
 app.get("/posts", async (req, res) => {
   try {
-    const posts = await db.all("SELECT * FROM posts");
-    res.json(posts);
+    const result = await pool.query("SELECT * FROM posts ORDER BY id ASC");
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// READ single post
+// READ one
 app.get("/posts/:id", async (req, res) => {
   try {
-    const post = await db.get("SELECT * FROM posts WHERE id = ?", [req.params.id]);
-    if (!post) return res.status(404).json({ message: "Post not found" });
-    res.json(post);
+    const result = await pool.query("SELECT * FROM posts WHERE id=$1", [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: "Post not found" });
+    res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// UPDATE post
+// UPDATE
 app.put("/posts/:id", async (req, res) => {
   try {
     const { title, content, author } = req.body;
-    await db.run(
-      "UPDATE posts SET title = ?, content = ?, author = ? WHERE id = ?",
+    await pool.query(
+      "UPDATE posts SET title=$1, content=$2, author=$3 WHERE id=$4",
       [title, content, author, req.params.id]
     );
     res.json({ message: "Post updated" });
@@ -84,10 +63,10 @@ app.put("/posts/:id", async (req, res) => {
   }
 });
 
-// DELETE post
+// DELETE
 app.delete("/posts/:id", async (req, res) => {
   try {
-    await db.run("DELETE FROM posts WHERE id = ?", [req.params.id]);
+    await pool.query("DELETE FROM posts WHERE id=$1", [req.params.id]);
     res.json({ message: "Post deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });

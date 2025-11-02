@@ -1,11 +1,27 @@
-const sqlite3 = require("sqlite3").verbose();
-const { open } = require("sqlite");
+const { Pool } = require("pg")
 
-async function openDb() {
-  return open({
-    filename: "./blog.db",
-    driver: sqlite3.Database,
-  });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // required for Render
+  },
+});
+
+async function initializeDb() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS posts (
+        id SERIAL PRIMARY KEY,
+        title TEXT,
+        content TEXT,
+        author TEXT,
+        date TIMESTAMP
+      )
+    `);
+    console.log("✅ PostgreSQL database and posts table ready");
+  } catch (err) {
+    console.error("❌ Error initializing database:", err);
+  }
 }
 
-module.exports = { openDb };
+module.exports = { pool, initializeDb };
